@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: elasticsearch
+    environment:
+      - "discovery.type=single-node"
+      - "xpack.security.enabled=false"
+      - "xpack.security.enrollment.enabled=false"
+      - "CLI_JAVA_OPTS=-Xms1g -Xmx1g"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - elastic
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: minio_server
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # API 端口 (Java 代码连接这个)
+      - "9001:9001" # 控制台端口 (浏览器访问这个)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      # 将数据持久化到当前目录下的 minio_data 文件夹
+      - ./minio_data:/data
+    restart: always
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+    # 2. 初始化任务：自动创建 Bucket
+    # 这个容器启动后会创建一个名为 'rag-docs' 的 bucket，然后自动退出
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/rag-docs;
+      /usr/bin/mc anonymous set public myminio/rag-docs; 
+      exit 0;
+      "
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.4
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    environment:
+      - "ELASTICSEARCH_HOSTS=http://elasticsearch:9200"
+    networks:
+      - elastic
+
+  rag-postgres:
+    image: postgres
+    container_name: rag-postgres
+    environment:
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_metadata
+    ports:
+      - "5432:5432"
+    restart: always
+
+networks:
+  elastic:
+    driver: bridge
