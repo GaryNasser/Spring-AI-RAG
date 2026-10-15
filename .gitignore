@@ -1,0 +1,27 @@
+# ===== 构建产物 =====
+target/
+build/
+out/
+*.class
+
+# ===== 密钥与本机配置 =====
+# 明文密钥绝不入库；参考 .env.example
+.env
+*.jks
+*.p12
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
